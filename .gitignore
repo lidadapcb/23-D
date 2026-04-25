@@ -1,0 +1,32 @@
+# 1. Keil MDK-ARM 编译生成的中间产物与输出文件 (黑名单)
+# 这些文件每次编译都会改变，且可通过源码重新生成，严禁纳入版本控制
+MDK-ARM/Objects/
+MDK-ARM/Listings/
+*.o
+*.d
+*.crf
+*.lnp
+*.axf
+*.htm
+*.sct
+*.dep
+*.hex
+*.bin
+*.map
+
+# 2. Keil 用户本地配置文件 (黑名单)
+# 包含特定电脑的窗口布局、断点信息，同步会导致团队协作冲突
+*.uvoptx
+*.uvguix.*
+*.scvd
+DebugConfig/
+JLinkLog.txt
+*.ini
+
+# 3. STM32CubeMX 备份与临时文件
+*.bak
+*.tmp
+
+# 4. 操作系统生成的隐藏缓存文件
+.DS_Store
+Thumbs.db
