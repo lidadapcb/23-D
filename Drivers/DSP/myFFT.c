@@ -285,40 +285,40 @@ void FFT_convert(uint16_t adc_arr[], COMPX fft_arr[], u16 fft_N, u8 mod, float32
 					// 假设载波中心频率为 100kHz，分辨率约为 61.035Hz
 					// 中心索引 = 100000 / 61.035156 ≈ 1638
 
-					int center_idx = 1638; 
-					int search_span = 100; 
+//					int center_idx = 1638; 
+//					int search_span = 100; 
 
-					printf("\r\n--- FFT Amplitude Spec (Near Carrier +/- 6kHz) ---\r\n");
-					for(int j = center_idx - search_span; j <= center_idx + search_span; j++) 
-					{
-							if(j >= 0 && j < 4096) 
-							{
-									// 设定阈值，过滤底噪
-									if(fft_arr[j].real > 100.0f) 
-									{
-											float freq = j * (500000.0f / 8192.0f);
-											printf("Idx: %4d | Freq: %7.1f Hz | Amp: %.2f\r\n", j, freq, fft_arr[j].real);
-									}
-							}
-					}
-					printf("---------------------------------------\r\n");
+//					printf("\r\n--- FFT Amplitude Spec (Near Carrier +/- 6kHz) ---\r\n");
+//					for(int j = center_idx - search_span; j <= center_idx + search_span; j++) 
+//					{
+//							if(j >= 0 && j < 4096) 
+//							{
+//									// 设定阈值，过滤底噪
+//									if(fft_arr[j].real > 100.0f) 
+//									{
+//											float freq = j * (500000.0f / 8192.0f);
+//											printf("Idx: %4d | Freq: %7.1f Hz | Amp: %.2f\r\n", j, freq, fft_arr[j].real);
+//									}
+//							}
+//					}
+//					printf("---------------------------------------\r\n");
 
-					printf("--- Peaks Extracted by Algorithm ---\r\n");
-					for(int k = 0; k < i; k++) // 变量 i 是 Afl_fft_getpeak 返回的有效峰值数量
-					{
-							/* * 修复 Error #144: 
-							 * 访问 _PEAK 结构体内部的成员。
-							 * 注意：如果编译依然提示找不到 ".index" 成员，
-							 * 请按住 Ctrl 键左键点击 "_PEAK" 查看其定义，
-							 * 将 ".index" 改为结构体实际定义的名字（可能是 .pos 或 .idx）
-							 */
-							int peak_idx = ADC1_Peak_ARR[k].index; 
-							
-							float peak_freq = peak_idx * (500000.0f / 8192.0f);
-							printf("Peak %d: Idx: %d | Freq: %.1f Hz | Amp: %.2f\r\n", 
-										 k+1, peak_idx, peak_freq, fft_arr[peak_idx].real);
-					}
-					printf("=======================================\r\n");
+//					printf("--- Peaks Extracted by Algorithm ---\r\n");
+//					for(int k = 0; k < i; k++) // 变量 i 是 Afl_fft_getpeak 返回的有效峰值数量
+//					{
+//							/* * 修复 Error #144: 
+//							 * 访问 _PEAK 结构体内部的成员。
+//							 * 注意：如果编译依然提示找不到 ".index" 成员，
+//							 * 请按住 Ctrl 键左键点击 "_PEAK" 查看其定义，
+//							 * 将 ".index" 改为结构体实际定义的名字（可能是 .pos 或 .idx）
+//							 */
+//							int peak_idx = ADC1_Peak_ARR[k].index; 
+//							
+//							float peak_freq = peak_idx * (500000.0f / 8192.0f);
+//							printf("Peak %d: Idx: %d | Freq: %.1f Hz | Amp: %.2f\r\n", 
+//										 k+1, peak_idx, peak_freq, fft_arr[peak_idx].real);
+//					}
+//					printf("=======================================\r\n");
     }
 }
 

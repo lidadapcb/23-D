@@ -55,6 +55,7 @@ virtualFolder:
           folders: []
         - name: CMSIS
           files:
+            - path: ../Drivers/arm_cortexM4lf_math.lib
             - path: ../Core/Src/system_stm32f4xx.c
           folders: []
     - name: DSP
@@ -65,6 +66,17 @@ virtualFolder:
         - path: ../Drivers/DSP/Afl_FFT.h
         - path: ../Drivers/DSP/myFFT.c
         - path: ../Drivers/DSP/myFFT.h
+        - path: ../Drivers/DSP/usart_Connect.h
+        - path: ../Drivers/DSP/usart_Connect.c
+        - path: ../Drivers/DSP/delay.c
+        - path: ../Drivers/DSP/delay.h
+        - path: ../Drivers/DSP/MY_Delay.c
+        - path: ../Drivers/DSP/MY_Delay.h
+      folders: []
+    - name: ad9959
+      files:
+        - path: ../Drivers/AD9959/ad9959.c
+        - path: ../Drivers/AD9959/ad9959.h
       folders: []
     - name: ::CMSIS
       files: []
@@ -79,6 +91,7 @@ targets:
       defineList:
         - USE_HAL_DRIVER
         - STM32F407xx
+        - ARM_MATH_CM4
       incList:
         - ../Core/Inc
         - ../Drivers/STM32F4xx_HAL_Driver/Inc
@@ -86,6 +99,7 @@ targets:
         - ../Drivers/CMSIS/Device/ST/STM32F4xx/Include
         - ../Drivers/CMSIS/Include
         - ../Drivers/DSP
+        - ../Drivers/AD9959
         - .cmsis/include
         - RTE/_F407_23D
       libList: []
@@ -120,7 +134,7 @@ targets:
             ro-base: ""
             rw-base: ""
             xo-base: ""
-        scatterFilePath: ""
+        scatterFilePath: F407_23D.sct
         storageLayout:
           RAM:
             - id: 1
@@ -194,7 +208,7 @@ targets:
                 size: "0x0"
                 startAddr: "0x0"
               tag: IROM
-        useCustomScatterFile: false
+        useCustomScatterFile: true
     uploadConfigMap:
       JLink:
         baseAddr: ""

@@ -57,6 +57,32 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define AD9959_RESET_Pin GPIO_PIN_0
+#define AD9959_RESET_GPIO_Port GPIOC
+#define AD9959_CS_Pin GPIO_PIN_1
+#define AD9959_CS_GPIO_Port GPIOC
+#define AD9959_SCLK_Pin GPIO_PIN_2
+#define AD9959_SCLK_GPIO_Port GPIOC
+#define AD9959_UPDATE_Pin GPIO_PIN_3
+#define AD9959_UPDATE_GPIO_Port GPIOC
+#define AD9959_SDIO0_Pin GPIO_PIN_4
+#define AD9959_SDIO0_GPIO_Port GPIOC
+#define AD9959_PDC_Pin GPIO_PIN_5
+#define AD9959_PDC_GPIO_Port GPIOC
+#define AD9959_PS0_Pin GPIO_PIN_0
+#define AD9959_PS0_GPIO_Port GPIOB
+#define AD9959_PS1_Pin GPIO_PIN_1
+#define AD9959_PS1_GPIO_Port GPIOB
+#define AD9959_PS2_Pin GPIO_PIN_2
+#define AD9959_PS2_GPIO_Port GPIOB
+#define AD9959_PS3_Pin GPIO_PIN_11
+#define AD9959_PS3_GPIO_Port GPIOF
+#define AD9959_SDIO1_Pin GPIO_PIN_13
+#define AD9959_SDIO1_GPIO_Port GPIOF
+#define AD9959_SDIO2_Pin GPIO_PIN_14
+#define AD9959_SDIO2_GPIO_Port GPIOF
+#define AD9959_SDIO3_Pin GPIO_PIN_15
+#define AD9959_SDIO3_GPIO_Port GPIOF
 
 /* USER CODE BEGIN Private defines */
 

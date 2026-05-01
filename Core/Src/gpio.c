@@ -42,10 +42,50 @@
 void MX_GPIO_Init(void)
 {
 
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, AD9959_RESET_Pin|AD9959_SCLK_Pin|AD9959_UPDATE_Pin|AD9959_SDIO0_Pin
+                          |AD9959_PDC_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(AD9959_CS_GPIO_Port, AD9959_CS_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, AD9959_PS0_Pin|AD9959_PS1_Pin|AD9959_PS2_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOF, AD9959_PS3_Pin|AD9959_SDIO1_Pin|AD9959_SDIO2_Pin|AD9959_SDIO3_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : AD9959_RESET_Pin AD9959_CS_Pin AD9959_SCLK_Pin AD9959_UPDATE_Pin
+                           AD9959_SDIO0_Pin AD9959_PDC_Pin */
+  GPIO_InitStruct.Pin = AD9959_RESET_Pin|AD9959_CS_Pin|AD9959_SCLK_Pin|AD9959_UPDATE_Pin
+                          |AD9959_SDIO0_Pin|AD9959_PDC_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : AD9959_PS0_Pin AD9959_PS1_Pin AD9959_PS2_Pin */
+  GPIO_InitStruct.Pin = AD9959_PS0_Pin|AD9959_PS1_Pin|AD9959_PS2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : AD9959_PS3_Pin AD9959_SDIO1_Pin AD9959_SDIO2_Pin AD9959_SDIO3_Pin */
+  GPIO_InitStruct.Pin = AD9959_PS3_Pin|AD9959_SDIO1_Pin|AD9959_SDIO2_Pin|AD9959_SDIO3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
 }
 

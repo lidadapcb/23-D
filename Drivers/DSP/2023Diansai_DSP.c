@@ -132,14 +132,14 @@ void CW_Test(void) {
 #define ABS_F(x) ((x) > 0.0f ? (x) : -(x))
 
 /**
- * @brief  重构的调制识别决策逻辑 (基于频谱几何拓扑特征)
+ * @brief  重构的调制识别决策逻辑 (融合 AM/FM 与 2FSK)
  * @return 识别出的调制类型编号
  */
 u8 Modulation_Judge(void)
 {
     u16 peak_num = 0;    
     u16 i = 0;
-    u16 carrier_idx = 0; // 载波索引
+    u16 carrier_idx = 0;
 
     if(FFT_Accomplish_TAG == 0) return 0;
     
@@ -147,27 +147,18 @@ u8 Modulation_Judge(void)
     if(peak_num == 0) return _ERR_;
     
     ADC1_Param.DC = ADC1_FFT[0].real / ADC1_Param.N;
-    
-//    // 1. 寻找载波：在所有有效峰值中寻找幅度最大的作为中心载波 fc
-//    for(i = 0; i < peak_num; i++) {
-//        if(ADC1_Peak_ARR[i].peak > ADC1_Peak_ARR[carrier_idx].peak) {
-//            carrier_idx = i;
-//        }
-//    }
-//    Index_MAX = carrier_idx; 
 
     // 单一峰值，判定为连续波
     if(peak_num == 1) {
-        Modem_ARR[_CW_].peak = ADC1_Peak_ARR[carrier_idx].peak;               
-        Modem_ARR[_CW_].fs = ADC1_Peak_ARR[carrier_idx].fs;
+        Modem_ARR[_CW_].peak = ADC1_Peak_ARR[0].peak;                
+        Modem_ARR[_CW_].fs = ADC1_Peak_ARR[0].fs;
         return _CW_;
     }
-// 【修正点 2】：利用频谱对称拓扑计算真实物理载波，而非寻找最大值
-    // AM 和 FM 的频谱一定是关于载波严格对称的，所以首尾两峰的均值就是理论载波频率
+    
+    // 利用首尾峰值均值寻找理论载波中心
     float spectrum_center = (ADC1_Peak_ARR[0].fs + ADC1_Peak_ARR[peak_num - 1].fs) / 2.0f;
     float min_dist = 999999.0f;
     
-    // 寻找最靠近理论中心的有效峰作为载波
     for(i = 0; i < peak_num; i++) {
         float dist = ABS_F(ADC1_Peak_ARR[i].fs - spectrum_center);
         if(dist < min_dist) {
@@ -175,9 +166,11 @@ u8 Modulation_Judge(void)
             carrier_idx = i;
         }
     }
-    Index_MAX = carrier_idx;
-    // 2. 几何对称性特征提取
-    // 检查载波两侧是否存在相邻的边带峰值
+    Index_MAX = carrier_idx; 
+
+    // ==========================================================
+    // 阶段一：模拟调制 (AM/FM) 判定
+    // ==========================================================
     if (carrier_idx > 0 && carrier_idx < peak_num - 1) 
     {
         float f_c = ADC1_Peak_ARR[carrier_idx].fs;
@@ -188,89 +181,126 @@ u8 Modulation_Judge(void)
         float peak_left = ADC1_Peak_ARR[carrier_idx - 1].peak;
         float peak_right = ADC1_Peak_ARR[carrier_idx + 1].peak;
 
-        // 计算两侧边带到载波的频率距离
         float delta_f_left = f_c - f_left;
         float delta_f_right = f_right - f_c;
 
-        // 验证频率对称性：两侧边带频率差应基本一致（容忍 2 个频率分辨率的量化误差，约 122Hz）
+        // 检查基本对称性
         if (ABS_F(delta_f_left - delta_f_right) < 150.0f) 
         {
-            // 计算基带调制频率 fm (取两侧频距的平均值提升精度)
             float fm = (delta_f_left + delta_f_right) / 2.0f;
-            
-            // 验证幅度对称性：AM 信号的上下边带幅度理论上严格相等
             float amp_diff_ratio = ABS_F(peak_left - peak_right) / peak_left;
 
-//            // 分类器：如果频谱相对干净（主峰极少）且侧带幅度高度对称，则为 AM
-//            if (peak_num <= 5 && amp_diff_ratio < 0.4f) 
-//            {
-//                Modem_ARR[_AM_].fs = f_c;
-//                Modem_ARR[_AM_].parameter2 = fm; // 调制频率
-//                // 调幅系数 ma 计算：两边带幅度之和 / 载波幅度
-//                Modem_ARR[_AM_].parameter1 = (peak_left + peak_right) / peak_c;
-//                return _AM_;
-//            } 
-					// 【修正点 3】：放宽 AM 的限制条件
-            // 在实际加窗插值的浮点运算中，对称的幅度可能会有一定误差
-            if (peak_num <= 3 && amp_diff_ratio < 0.6f) 
+					 // 【核心护城河】：利用赛题物理规则隔离数字调制
+					// 计算等效调幅系数 ma
+            float ma_val = (peak_left + peak_right) / peak_c;
+           
+            // 如果 fm <= 5.5kHz，才允许进入 AM/FM 判断；否则强制进入下方的数字调制分支
+            if (fm <= 5500.0f) 
             {
-                // ... (保留你的 AM 计算逻辑)
-                Modem_ARR[_AM_].fs = f_c;
-                Modem_ARR[_AM_].parameter2 = fm; 
-                Modem_ARR[_AM_].parameter1 = (peak_left + peak_right) / peak_c;
-                return _AM_;
-            }
-            else 
-            {
-               // 存在多对侧带，进入 FM 分析
-                Modem_ARR[_FM_].fs = f_c;
-                Modem_ARR[_FM_].parameter2 = fm; // 调制频率
-                
-                // ==========================================================
-                // 【电赛核心算法：频谱能量方差法精确估计最大频偏】
-                // 弃用误差极大的卡森法则，利用贝塞尔函数的二阶矩数学恒等式：
-                // Σ(Δf² * A²) / Σ(A²) = (df_max² / 2)
-                // 此方法对边缘边带的丢失具有极强的抗干扰鲁棒性
-                // ==========================================================
-                float power_sum = 0.0f;
-                float freq_var_sum = 0.0f;
-                
-                for(int k = 0; k < peak_num; k++) {
-                    float amp = ADC1_Peak_ARR[k].peak;
-                    // 计算当前边带距离载波的频率差
-                    float f_diff = ADC1_Peak_ARR[k].fs - f_c;
+                if (peak_num <= 3 && amp_diff_ratio < 0.5f&& ma_val < 1.1f) 
+                {
+                    Modem_ARR[_AM_].fs = f_c;
+                    Modem_ARR[_AM_].parameter2 = fm; 
+                    Modem_ARR[_AM_].parameter1 = ma_val;
+                    return _AM_;
+                } 
+                else 
+                {
+                    Modem_ARR[_FM_].fs = f_c;
+                    Modem_ARR[_FM_].parameter2 = fm; 
                     
-                    // 功率正比于幅度的平方
-                    float power = amp * amp; 
+                    // 使用方差能量法精确计算 FM 最大频偏
+                    float power_sum = 0.0f;
+                    float freq_var_sum = 0.0f;
+                    for(int k = 0; k < peak_num; k++) {
+                        float amp = ADC1_Peak_ARR[k].peak;
+                        float f_diff = ADC1_Peak_ARR[k].fs - f_c;
+                        float power = amp * amp; 
+                        power_sum += power;
+                        freq_var_sum += power * (f_diff * f_diff);
+                    }
                     
-                    power_sum += power;
-                    freq_var_sum += power * (f_diff * f_diff);
+                    float df_max = 0.0f;
+                    if(power_sum > 0.0f) {
+                        float variance = freq_var_sum / power_sum;
+                        arm_sqrt_f32(2.0f * variance, &df_max);
+                    }
+                    Modem_ARR[_FM_].parameter3 = df_max;
+                    if (fm > 0) Modem_ARR[_FM_].parameter1 = df_max / fm;
+                    else Modem_ARR[_FM_].parameter1 = 0;
+                    
+                    return _FM_;
                 }
-                
-                float df_max = 0.0f;
-                if(power_sum > 0.0f) {
-                    // 计算频谱方差
-                    float variance = freq_var_sum / power_sum;
-                    // 反推最大频偏 df_max = sqrt(2 * variance)
-                    arm_sqrt_f32(2.0f * variance, &df_max);
-                }
-                
-                Modem_ARR[_FM_].parameter3 = df_max;
-                
-                // 计算调频系数 mf = df_max / fm
-                if (fm > 0) Modem_ARR[_FM_].parameter1 = df_max / fm;
-                else Modem_ARR[_FM_].parameter1 = 0;
-                
-                return _FM_;
             }
         }
     }
 
-    // 3. 数字调制降级判定
-    // 若不存在对称的射频载波边带拓扑，依据能量集中度推算数字调制
-    if(ADC1_Param.THD > 30) {
-        if(peak_num <= 3) return _2ASK_;
-        else return _2FSK_;
+  // ==========================================================
+    // 阶段二：数字调制 (2FSK 等) 判定
+    // ==========================================================
+    
+    // 重新提取带内幅度最大的前 3 个峰
+    // 【核心修正】：强制加上频段护城河，绝对丢弃 70kHz 以下和 130kHz 以上的任何噪声峰
+    float max1_amp = 0, max2_amp = 0, max3_amp = 0;
+    float f1 = 0, f2 = 0, f3 = 0;
+
+    for(int k = 0; k < peak_num; k++) {
+        float fs = ADC1_Peak_ARR[k].fs;
+        float amp = ADC1_Peak_ARR[k].peak;
+        
+        // 物理隔离带：只有在这个中频带内的峰才允许参与 2FSK 计算
+        if(fs > 70000.0f && fs < 130000.0f) {
+            if(amp > max1_amp) {
+                max3_amp = max2_amp; f3 = f2;
+                max2_amp = max1_amp; f2 = f1;
+                max1_amp = amp;      f1 = fs;
+            } else if(amp > max2_amp) {
+                max3_amp = max2_amp; f3 = f2;
+                max2_amp = amp;      f2 = fs;
+            } else if(amp > max3_amp) {
+                max3_amp = amp;      f3 = fs;
+            }
+        }
+    }
+
+    // 计算主载波参数
+    float delta_F_digital = ABS_F(f1 - f2);
+
+    // 2FSK 判定：两个主载波频差显著
+    if (delta_F_digital >= 4000.0f) // 赛题 2FSK 最小频偏跨度通常大于此值
+    {
+        Modem_ARR[_2FSK_].fs = spectrum_center; 
+        
+        float Rc = 0.0f;
+        float h = 0.0f;
+        
+        // 【核心修正】：针对无侧带现象的物理降级策略
+        if (max3_amp > 80.0f && ABS_F(f3 - f1) > 1000.0f && ABS_F(f3 - f2) > 1000.0f) 
+        {
+            // 情况 A：存在有效的第三个侧带峰
+            float dist_to_f1 = ABS_F(f3 - f1);
+            float dist_to_f2 = ABS_F(f3 - f2);
+            float sideband_dist = (dist_to_f1 < dist_to_f2) ? dist_to_f1 : dist_to_f2;
+            Rc = sideband_dist * 2.0f;
+        } 
+        else 
+        {
+            // 情况 B：侧带能量消失 (对应 h=1 等特例)
+            // 此时两个载波之间的距离近似等于码元速率
+            Rc = delta_F_digital; 
+        }
+        
+        if (Rc > 0) {
+            h = delta_F_digital / Rc;
+        }
+
+        // 装载物理参数
+        // 请注意：这里我统一规定 parameter1 为码速率，parameter2 为 h
+        // 如果你的打印还是反的，请去修改你的 printf 函数，不要改这里！
+        Modem_ARR[_2FSK_].parameter1 = Rc; // 码速率 Rc (Hz)
+        Modem_ARR[_2FSK_].parameter2 = h;  // 键控系数 h
+        
+        return _2FSK_;
     }
 
     return _ERR_;   
@@ -392,8 +422,8 @@ int fft_osc_filter(_PEAK output[])
     Tag_peak = 0.05f * Max_peak;    
     
     // 绝对底噪门限死死守住 150.0f，低于此值的微小波动一律视为白噪声
-    if (Tag_peak < 150.0f) {
-        Tag_peak = 150.0f; 
+    if (Tag_peak < 40.0f) {
+        Tag_peak = 40.0f; 
     }
     
     // 清空输出数组

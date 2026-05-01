@@ -29,6 +29,7 @@
 #include "myFFT.h"
 #include "2023Diansai_DSP.h"
 #include <stdio.h>
+#include "ad9959.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -103,6 +104,9 @@ int main(void)
   
   // 2. 启动触发ADC采样的定时器(根据您的工程环境为TIM3)
   HAL_TIM_Base_Start(&htim3);
+	ad9959_init();
+	ad9959_write_frequency(AD9959_CHANNEL_0, 1900000);
+	ad9959_write_amplitude(AD9959_CHANNEL_0, 1000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
