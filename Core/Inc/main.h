@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define RADIO_RST_Pin GPIO_PIN_10
+#define RADIO_RST_GPIO_Port GPIOF
 #define AD9959_RESET_Pin GPIO_PIN_0
 #define AD9959_RESET_GPIO_Port GPIOC
 #define AD9959_CS_Pin GPIO_PIN_1

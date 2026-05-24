@@ -20,12 +20,15 @@
 #include "main.h"
 #include "adc.h"
 #include "dma.h"
+#include "i2c.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "si4732.h"
+#include "i2c.h"
 #include "myFFT.h"
 #include "2023Diansai_DSP.h"
 #include <stdio.h>
@@ -50,6 +53,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+Si4732_Handle_t hRadio;
 volatile uint8_t adc_cplt_flag = 0; // ADC/DMA采集完成标志
 /* USER CODE END PV */
 
@@ -98,15 +102,25 @@ int main(void)
   MX_TIM3_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   // 1. 初始化FFT和DSP参数 (500k采样率，16384点，3.3V量程)
   myFFT_init();
   
   // 2. 启动触发ADC采样的定时器(根据您的工程环境为TIM3)
   HAL_TIM_Base_Start(&htim3);
-	ad9959_init();
-	ad9959_write_frequency(AD9959_CHANNEL_0, 1900000);
-	ad9959_write_amplitude(AD9959_CHANNEL_0, 1000);
+	// AD9959 Initialization and CH0 setup (86MHz, 500mVpp approx)
+  ad9959_init();
+	ad9959_write_frequency(AD9959_CHANNEL_3, 1900000);
+  ad9959_write_amplitude(AD9959_CHANNEL_3, 1000);
+  ad9959_write_frequency(AD9959_CHANNEL_0, 86000000);
+  ad9959_write_amplitude(AD9959_CHANNEL_0, 1000);
+
+  // Si4732 Initialization
+  Si4732_Init(&hRadio, &hi2c1, RADIO_RST_GPIO_Port, RADIO_RST_Pin);
+  Si4732_PowerUp(&hRadio, MODE_FM);
+  Si4732_SetVolume(&hRadio, 63);
+  Si4732_SetFrequency(&hRadio, 8800);
   /* USER CODE END 2 */
 
   /* Infinite loop */

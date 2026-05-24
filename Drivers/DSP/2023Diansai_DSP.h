@@ -10,8 +10,8 @@ typedef struct
     float peak;
     double fs;
 }_PEAK;
-
-extern _PEAK ADC1_Peak_ARR[50];
+#define Max_Peak_Num 150
+extern _PEAK ADC1_Peak_ARR[Max_Peak_Num];
 
 #define _ERR_  0
 #define _CW_   1

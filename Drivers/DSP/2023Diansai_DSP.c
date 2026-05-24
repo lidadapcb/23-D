@@ -15,7 +15,7 @@ Modem_Type Modem_ARR[8] =
  {	_2PSK_, 			0,					0, 						0, 				0, 					0, 					0,					0,	      	0,		      0				 },
 };
 
-#define Max_Peak_Num 50
+
 _PEAK ADC1_Peak_ARR[Max_Peak_Num]; // ADC1 频率峰值记录数组
 
 /**
@@ -104,6 +104,11 @@ void CW_Test(void) {
 //	
 //	peak_num = fft_osc_filter(ADC1_Peak_ARR);
 //	if(peak_num == 0) return _ERR_;
+    // --- Debug: Print Top 4 Peaks for Digital Modulation Analysis ---
+//    printf("\r\n[Top 4 Peaks]\r\n");
+//    for(int d = 0; d < 4 && d < peak_num; d++) {
+//        printf("Peak %d: Freq=%.1fHz, Amp=%.1f\r\n", d, ADC1_Peak_ARR[d].fs, ADC1_Peak_ARR[d].peak);
+//    }
 //	
 //	ADC1_Param.DC = ADC1_FFT[0].real / ADC1_Param.N;
 //	
@@ -145,6 +150,11 @@ u8 Modulation_Judge(void)
     
     peak_num = fft_osc_filter(ADC1_Peak_ARR);
     if(peak_num == 0) return _ERR_;
+    // --- Debug: Print Top 4 Peaks for Digital Modulation Analysis ---
+    printf("\r\n[Top 4 Peaks]\r\n");
+    for(int d = 0; d < 10 && d < peak_num; d++) {
+        printf("Peak %d: Freq=%.1fHz, Amp=%.1f\r\n", d, ADC1_Peak_ARR[d].fs, ADC1_Peak_ARR[d].peak);
+    }
     
     ADC1_Param.DC = ADC1_FFT[0].real / ADC1_Param.N;
 
@@ -168,143 +178,287 @@ u8 Modulation_Judge(void)
     }
     Index_MAX = carrier_idx; 
 
+            // ==========================================================
+    // --- Data-Driven Digital Modulation Logic (2ASK, 2FSK, 2PSK) ---
     // ==========================================================
-    // 阶段一：模拟调制 (AM/FM) 判定
-    // ==========================================================
-    if (carrier_idx > 0 && carrier_idx < peak_num - 1) 
     {
-        float f_c = ADC1_Peak_ARR[carrier_idx].fs;
-        float f_left = ADC1_Peak_ARR[carrier_idx - 1].fs;
-        float f_right = ADC1_Peak_ARR[carrier_idx + 1].fs;
+    // ==========================================================
+        // 0. 无漏洞的峰值排序提取 (取前 4 大)
+        // ==========================================================
+        _PEAK top_peaks[4];
+        int top_n = (peak_num < 4) ? peak_num : 4;
         
-        float peak_c = ADC1_Peak_ARR[carrier_idx].peak;
-        float peak_left = ADC1_Peak_ARR[carrier_idx - 1].peak;
-        float peak_right = ADC1_Peak_ARR[carrier_idx + 1].peak;
-
-        float delta_f_left = f_c - f_left;
-        float delta_f_right = f_right - f_c;
-
-        // 检查基本对称性
-        if (ABS_F(delta_f_left - delta_f_right) < 150.0f) 
-        {
-            float fm = (delta_f_left + delta_f_right) / 2.0f;
-            float amp_diff_ratio = ABS_F(peak_left - peak_right) / peak_left;
-
-					 // 【核心护城河】：利用赛题物理规则隔离数字调制
-					// 计算等效调幅系数 ma
-            float ma_val = (peak_left + peak_right) / peak_c;
-           
-            // 如果 fm <= 5.5kHz，才允许进入 AM/FM 判断；否则强制进入下方的数字调制分支
-            if (fm <= 5500.0f) 
-            {
-                if (peak_num <= 3 && amp_diff_ratio < 0.5f&& ma_val < 1.1f) 
-                {
-                    Modem_ARR[_AM_].fs = f_c;
-                    Modem_ARR[_AM_].parameter2 = fm; 
-                    Modem_ARR[_AM_].parameter1 = ma_val;
-                    return _AM_;
-                } 
-                else 
-                {
-                    Modem_ARR[_FM_].fs = f_c;
-                    Modem_ARR[_FM_].parameter2 = fm; 
-                    
-                    // 使用方差能量法精确计算 FM 最大频偏
-                    float power_sum = 0.0f;
-                    float freq_var_sum = 0.0f;
-                    for(int k = 0; k < peak_num; k++) {
-                        float amp = ADC1_Peak_ARR[k].peak;
-                        float f_diff = ADC1_Peak_ARR[k].fs - f_c;
-                        float power = amp * amp; 
-                        power_sum += power;
-                        freq_var_sum += power * (f_diff * f_diff);
+        for(int m = 0; m < top_n; m++) {
+            int best_idx = -1;
+            float max_v = -1.0f;
+            for(int n = 0; n < peak_num; n++) {
+                int already_in = 0;
+                // 【修复 Bug】：删除了错误的 n > 0 判断
+                for(int p = 0; p < m; p++) {
+                    if(ADC1_Peak_ARR[n].fs == top_peaks[p].fs) { 
+                        already_in = 1; 
+                        break; 
                     }
-                    
-                    float df_max = 0.0f;
-                    if(power_sum > 0.0f) {
-                        float variance = freq_var_sum / power_sum;
-                        arm_sqrt_f32(2.0f * variance, &df_max);
-                    }
-                    Modem_ARR[_FM_].parameter3 = df_max;
-                    if (fm > 0) Modem_ARR[_FM_].parameter1 = df_max / fm;
-                    else Modem_ARR[_FM_].parameter1 = 0;
-                    
-                    return _FM_;
+                }
+                if(!already_in && ADC1_Peak_ARR[n].peak > max_v) {
+                    max_v = ADC1_Peak_ARR[n].peak;
+                    best_idx = n;
                 }
             }
+            if(best_idx != -1) top_peaks[m] = ADC1_Peak_ARR[best_idx];
         }
-    }
 
-  // ==========================================================
-    // 阶段二：数字调制 (2FSK 等) 判定
-    // ==========================================================
-    
-    // 重新提取带内幅度最大的前 3 个峰
-    // 【核心修正】：强制加上频段护城河，绝对丢弃 70kHz 以下和 130kHz 以上的任何噪声峰
-    float max1_amp = 0, max2_amp = 0, max3_amp = 0;
-    float f1 = 0, f2 = 0, f3 = 0;
+        if(top_n >= 2) {
+            float max1_freq = top_peaks[0].fs;
+            float max1_amp  = top_peaks[0].peak;
+            float max2_freq = top_peaks[1].fs;
+            float max2_amp  = top_peaks[1].peak;
 
-    for(int k = 0; k < peak_num; k++) {
-        float fs = ADC1_Peak_ARR[k].fs;
-        float amp = ADC1_Peak_ARR[k].peak;
-        
-        // 物理隔离带：只有在这个中频带内的峰才允许参与 2FSK 计算
-        if(fs > 70000.0f && fs < 130000.0f) {
-            if(amp > max1_amp) {
-                max3_amp = max2_amp; f3 = f2;
-                max2_amp = max1_amp; f2 = f1;
-                max1_amp = amp;      f1 = fs;
-            } else if(amp > max2_amp) {
-                max3_amp = max2_amp; f3 = f2;
-                max2_amp = amp;      f2 = fs;
-            } else if(amp > max3_amp) {
-                max3_amp = amp;      f3 = fs;
+            // ==========================================================
+            // 1. 基础间隔提取 raw_Rc
+            // ==========================================================
+            float raw_Rc = 999999.0f;
+            for(int m = 0; m < top_n; m++) {
+                for(int n = m + 1; n < top_n; n++) {
+                    float diff = ABS_F(top_peaks[m].fs - top_peaks[n].fs);
+                    if(diff > 1500.0f && diff < raw_Rc) {
+                        raw_Rc = diff;
+                    }
+                }
             }
-        }
+            if(raw_Rc == 999999.0f) raw_Rc = ABS_F(max1_freq - max2_freq);
+
+// ==========================================================
+            // 2. 能量跨度与物理特征修正 (响应 1010 序列规律)
+            // ==========================================================
+            float f_min = 999999.0f;
+            float f_max = 0.0f;
+            for (int m = 0; m < top_n; m++) {
+                if (top_peaks[m].peak > max1_amp * 0.4f) { 
+                    if (top_peaks[m].fs < f_min) f_min = top_peaks[m].fs;
+                    if (top_peaks[m].fs > f_max) f_max = top_peaks[m].fs;
+                }
+            }
+            float delta_F = f_max - f_min; 
+            float main_peak_dist = ABS_F(max1_freq - max2_freq);
+            
+            // 【物理分水岭】：计算“强能量总跨度”与“两最大峰间距”的比值
+            // FSK 能量集中在两主峰之间，比例趋近于 1.0
+            // FM 能量向外扩散，比例通常大于 1.5
+            float span_ratio = (main_peak_dist > 0) ? (delta_F / main_peak_dist) : 1.0f;
+
+            float true_Rc = raw_Rc * 2.0f; 
+            float true_h = (true_Rc > 0) ? (delta_F / true_Rc) : 0;
+
+// ==========================================================
+            // 3. 载波能量与频谱平坦度分析 (严格的物理分水岭统计)
+            // ==========================================================
+            float fc_amp = 0;
+            int strong_peak_count = 0; 
+            
+            for(int k = 0; k < peak_num; k++) {
+                // 1. 提取载波能量
+                if(ABS_F(ADC1_Peak_ARR[k].fs - 100000.0f) < 800.0f) { 
+                    fc_amp = ADC1_Peak_ARR[k].peak;
+                }
+                
+                // 2. 统计强峰数量 (区分 Bessel 连续谱 与 Sinc 离散谱)
+                // 物理极限：2FSK 侧带理论最高约为主峰的 33%。
+                // 设定 45% 作为界限，2FSK 强峰数绝对 <= 2，而宽带 FM 强峰数必定 >= 4
+                if(ADC1_Peak_ARR[k].peak > max1_amp * 0.45f) {
+                    strong_peak_count++;
+                }
+            }
+
+            // ==========================================================
+            // 4. 拓扑分类判定 (两级宇宙模型)
+            // ==========================================================
+// 计算有效宽频侧带数量 (用于拦截载波震荡变高的宽带 FM)
+            int valid_peak_count = 0;
+            for(int k=0; k<peak_num; k++) {
+                if(ADC1_Peak_ARR[k].peak > max1_amp * 0.15f) valid_peak_count++;
+            }
+
+            // ==========================================================
+            // 4. 拓扑分类判定 (两级宇宙模型)
+            // ==========================================================
+            
+            // 【第一宇宙】：载波占据绝对主导地位，且频带极其狭窄 (AM, 2ASK, 窄带 NBFM)
+            // 增加 valid_peak_count <= 5 条件，防止 20kHz 这种高频偏 FM 混入
+            if (fc_amp > max1_amp * 0.65f && valid_peak_count <= 5) {
+                
+                if (peak_num <= 3) {
+                    Modem_ARR[_AM_].fs = 100000.0f;
+                    Modem_ARR[_AM_].peak = max1_amp;
+                    float ma = (max2_amp * 2.0f) / max1_amp;
+                    if (ma > 1.0f) ma = 1.0f;
+                    Modem_ARR[_AM_].parameter1 = ma;      
+                    Modem_ARR[_AM_].parameter2 = raw_Rc;  
+                    return _AM_;
+                } else {
+                    // 依靠贝塞尔展开式的偶次谐波区分 NBFM 与 2ASK
+                    int has_even_harmonic = 0;
+                    for(int k = 0; k < peak_num; k++) {
+                        float dist_to_fc = ABS_F(ADC1_Peak_ARR[k].fs - 100000.0f);
+                        if (ABS_F(dist_to_fc - (raw_Rc * 2.0f)) < 1500.0f) {
+                            has_even_harmonic = 1; break;
+                        }
+                    }
+
+                    if (has_even_harmonic) {
+                        Modem_ARR[_FM_].fs = 100000.0f;
+                        Modem_ARR[_FM_].peak = max1_amp;
+                        // NBFM 贝塞尔倒推
+                        float bessel_ratio = max2_amp / max1_amp;
+                        float mf = 2.0f * bessel_ratio; 
+                        float df_max = mf * raw_Rc;
+                        
+                        Modem_ARR[_FM_].parameter1 = mf;       
+                        Modem_ARR[_FM_].parameter2 = raw_Rc;   
+                        Modem_ARR[_FM_].parameter3 = df_max;   
+                        return _FM_;
+                    } else {
+                        // 方波无偶次谐波，判定为 2ASK
+                        Modem_ARR[_2ASK_].fs = 100000.0f;
+                        Modem_ARR[_2ASK_].peak = max1_amp;
+                        Modem_ARR[_2ASK_].parameter1 = 0;
+                        Modem_ARR[_2ASK_].parameter2 = true_Rc; 
+                        return _2ASK_;
+                    }
+                }
+            }
+            
+// 【第二宇宙】：载波被抑制 (宽带 WBFM, 2FSK, 2PSK)
+            else {
+                // 1. 提取信号的最宽有效边界 (span)
+                float f_left = 999999.0f;
+                float f_right = 0.0f;
+                for(int k=0; k<peak_num; k++) {
+                    // 提取所有大于 30% 最大幅值的峰作为边界
+                    if(ADC1_Peak_ARR[k].peak > max1_amp * 0.3f) {
+                        if(ADC1_Peak_ARR[k].fs < f_left) f_left = ADC1_Peak_ARR[k].fs;
+                        if(ADC1_Peak_ARR[k].fs > f_right) f_right = ADC1_Peak_ARR[k].fs;
+                    }
+                }
+                float span = f_right - f_left;
+                
+  // 2. 2PSK 绝对保护 (完美对称与间距锁定)
+                float max_midpoint = (max1_freq + max2_freq) / 2.0f;
+                float max_dist = ABS_F(max1_freq - max2_freq);
+                
+                // 【物理分水岭】：2PSK (1010序列) 的两大主峰必然完美对称于 100kHz，
+                // 且因为方波偶次谐波为零的特性，它们的主峰间距 (max_dist) 必须严格等于全场基准间距 (raw_Rc)！
+                if (ABS_F(max_midpoint - 100000.0f) < 2000.0f) {
+                    if (ABS_F(max_dist - raw_Rc) < 1500.0f) {
+                        // 且载波处(100kHz)被深度抑制
+                        if (fc_amp < max1_amp * 0.4f) {
+                            Modem_ARR[_2PSK_].fs = 100000.0f;
+                            Modem_ARR[_2PSK_].peak = max1_amp;
+                            
+                            // 对于 2PSK，真实的 Rc 就是两个主侧带的间距
+                            Modem_ARR[_2PSK_].parameter1 = max_dist;       
+                            Modem_ARR[_2PSK_].parameter2 = max_dist; 
+                            return _2PSK_;
+                        }
+											}
+										}
+
+  // 3. WBFM 与 2FSK 剥离: 中心能量真空探测 (物理深谷分水岭)
+                int center_is_empty = 1; 
+                
+                if (span > 15000.0f) {
+                    // 划定中心区域 (抛弃两端各 25% 的频带，只看中间一半)
+                    float mid_left = f_left + span * 0.25f;
+                    float mid_right = f_right - span * 0.25f;
+                    
+                    for(int k = 0; k < peak_num; k++) {
+                        if (ADC1_Peak_ARR[k].fs > mid_left && ADC1_Peak_ARR[k].fs < mid_right) {
+                            // 【修正 1】：提高真空容忍度到 40%。
+                            // FSK 侧带叠加的谷底约 33%，FM 连续谱填充高达 50% 以上。40% 是绝佳的深谷分水岭！
+                            if (ADC1_Peak_ARR[k].peak > max1_amp * 0.40f) { 
+                                center_is_empty = 0; 
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    center_is_empty = 0; // 极窄的谱线默认归入 FM
+                }
+
+                // 4. 执行分类
+if (!center_is_empty) {
+                    // 中心被高能量填满 -> 宽带调频 WBFM
+                    Modem_ARR[_FM_].fs = 100000.0f;
+                    Modem_ARR[_FM_].peak = max1_amp;
+                    
+                    float fm_min = 100000.0f;
+                    float fm_max = 100000.0f;
+                    for(int k = 0; k < peak_num; k++) {
+                        // 【核心修正】：统一使用 0.18f 黄金阈值，完美兼容 10k, 20k, 25k 的卡森物理边界
+                        if(ADC1_Peak_ARR[k].peak > max1_amp * 0.18f && ABS_F(ADC1_Peak_ARR[k].fs - 100000.0f) < 60000.0f) {
+                            if(ADC1_Peak_ARR[k].fs < fm_min) fm_min = ADC1_Peak_ARR[k].fs;
+                            if(ADC1_Peak_ARR[k].fs > fm_max) fm_max = ADC1_Peak_ARR[k].fs;
+                        }
+                    }
+                    float BW = fm_max - fm_min; 
+                    float df_max = (BW / 2.0f) - raw_Rc;
+                    if(df_max < 0.0f) df_max = raw_Rc; 
+                    
+                    float mf = 0;
+                    if(raw_Rc > 0) mf = df_max / raw_Rc;
+
+                    Modem_ARR[_FM_].parameter1 = mf;       
+                    Modem_ARR[_FM_].parameter2 = raw_Rc;   
+                    Modem_ARR[_FM_].parameter3 = df_max;   
+                    return _FM_;
+                    
+                } else {
+                    // 中心存在深谷 -> 2FSK
+                    Modem_ARR[_2FSK_].fs = 100000.0f; // 2FSK的理论中心
+                    Modem_ARR[_2FSK_].peak = max1_amp;
+                    
+                    // Rc 倒推容错
+                    if (raw_Rc > 12000.0f || raw_Rc < 3000.0f) { 
+                         for(int test_h = 2; test_h <= 12; test_h++) {
+                             float temp_Rc = span / test_h; 
+                             if(temp_Rc >= 4000.0f && temp_Rc <= 11000.0f) {
+                                 raw_Rc = temp_Rc;
+                                 true_Rc = temp_Rc * 2.0f; 
+                                 break;
+                             }
+                         }
+                    }
+                    
+                    // 【修正 2】：精准提取左右两个主载波的真实距离
+                    // 抛弃包含侧带的 span，只找左半区最强峰和右半区最强峰
+                    float max_amp_L = 0; float f_carrier_L = 100000.0f;
+                    float max_amp_R = 0; float f_carrier_R = 100000.0f;
+                    for(int k = 0; k < peak_num; k++) {
+                        if (ADC1_Peak_ARR[k].fs < 100000.0f && ADC1_Peak_ARR[k].peak > max_amp_L) {
+                            max_amp_L = ADC1_Peak_ARR[k].peak;
+                            f_carrier_L = ADC1_Peak_ARR[k].fs;
+                        }
+                        if (ADC1_Peak_ARR[k].fs > 100000.0f && ADC1_Peak_ARR[k].peak > max_amp_R) {
+                            max_amp_R = ADC1_Peak_ARR[k].peak;
+                            f_carrier_R = ADC1_Peak_ARR[k].fs;
+                        }
+                    }
+                    
+                    // 两个真实载波的频率差，除以 2 得到单边频偏
+                    float carrier_span = ABS_F(f_carrier_R - f_carrier_L);
+                    float true_h = (true_Rc > 0) ? ((carrier_span / 2.0f) / true_Rc) : 0;
+                    
+                    Modem_ARR[_2FSK_].parameter1 = true_h;  
+                    Modem_ARR[_2FSK_].parameter2 = true_Rc; 
+                    return _2FSK_;
+                }
+            }
+            
+					}
     }
-
-    // 计算主载波参数
-    float delta_F_digital = ABS_F(f1 - f2);
-
-    // 2FSK 判定：两个主载波频差显著
-    if (delta_F_digital >= 4000.0f) // 赛题 2FSK 最小频偏跨度通常大于此值
-    {
-        Modem_ARR[_2FSK_].fs = spectrum_center; 
-        
-        float Rc = 0.0f;
-        float h = 0.0f;
-        
-        // 【核心修正】：针对无侧带现象的物理降级策略
-        if (max3_amp > 80.0f && ABS_F(f3 - f1) > 1000.0f && ABS_F(f3 - f2) > 1000.0f) 
-        {
-            // 情况 A：存在有效的第三个侧带峰
-            float dist_to_f1 = ABS_F(f3 - f1);
-            float dist_to_f2 = ABS_F(f3 - f2);
-            float sideband_dist = (dist_to_f1 < dist_to_f2) ? dist_to_f1 : dist_to_f2;
-            Rc = sideband_dist * 2.0f;
-        } 
-        else 
-        {
-            // 情况 B：侧带能量消失 (对应 h=1 等特例)
-            // 此时两个载波之间的距离近似等于码元速率
-            Rc = delta_F_digital; 
-        }
-        
-        if (Rc > 0) {
-            h = delta_F_digital / Rc;
-        }
-
-        // 装载物理参数
-        // 请注意：这里我统一规定 parameter1 为码速率，parameter2 为 h
-        // 如果你的打印还是反的，请去修改你的 printf 函数，不要改这里！
-        Modem_ARR[_2FSK_].parameter1 = Rc; // 码速率 Rc (Hz)
-        Modem_ARR[_2FSK_].parameter2 = h;  // 键控系数 h
-        
-        return _2FSK_;
-    }
-
     return _ERR_;   
 }
+		
 /**
  * @brief  频谱列表排序（按频率索引升序）
  */
@@ -407,8 +561,8 @@ int fft_osc_filter(_PEAK output[])
     // 【核心修改 1】：引入软件带通滤波器，限定搜索范围在 73kHz ~ 128kHz
     // 索引 1200 对应约 73.2kHz，索引 2100 对应约 128.1kHz
     // 彻底屏蔽低频包络泄露 (例如 1kHz 假峰) 和高频二次谐波 (例如 200kHz 假峰)
-    u16 search_start = 1200; 
-    u16 search_end = 2100;   
+    u16 search_start = 750; 
+    u16 search_end = 2600;   
 
     // 第 1 步：仅在有效频段内寻找最大峰值 (Max_peak)
     for(i = search_start; i < search_end; i++) {
@@ -419,7 +573,7 @@ int fft_osc_filter(_PEAK output[])
     
     // 【核心修改 2】：放宽相对阈值，严格绝对阈值
     // 将比例从 10% 降为 5% (0.05f)，确保调频(FM)信号较弱的边缘贝塞尔侧带不被漏掉
-    Tag_peak = 0.05f * Max_peak;    
+    Tag_peak = 0.10f * Max_peak;    
     
     // 绝对底噪门限死死守住 150.0f，低于此值的微小波动一律视为白噪声
     if (Tag_peak < 40.0f) {
