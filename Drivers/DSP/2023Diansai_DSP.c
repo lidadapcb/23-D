@@ -221,7 +221,7 @@ u8 Modulation_Judge(void)
             for(int m = 0; m < top_n; m++) {
                 for(int n = m + 1; n < top_n; n++) {
                     float diff = ABS_F(top_peaks[m].fs - top_peaks[n].fs);
-                    if(diff > 1500.0f && diff < raw_Rc) {
+                    if(diff > 500.0f && diff < raw_Rc) {
                         raw_Rc = diff;
                     }
                 }
@@ -417,18 +417,18 @@ if (!center_is_empty) {
                     Modem_ARR[_2FSK_].fs = 100000.0f; // 2FSK的理论中心
                     Modem_ARR[_2FSK_].peak = max1_amp;
                     
-                    // Rc 倒推容错
-                    if (raw_Rc > 12000.0f || raw_Rc < 3000.0f) { 
+    // Rc 倒推容错 (放宽下限阈值，解除对 6kbps 及以下速率的封锁)
+                    if (raw_Rc > 12000.0f || raw_Rc < 1500.0f) { 
                          for(int test_h = 2; test_h <= 12; test_h++) {
                              float temp_Rc = span / test_h; 
-                             if(temp_Rc >= 4000.0f && temp_Rc <= 11000.0f) {
+                             // 同时也要放宽循环里的容错下限
+                             if(temp_Rc >= 1500.0f && temp_Rc <= 11000.0f) {
                                  raw_Rc = temp_Rc;
                                  true_Rc = temp_Rc * 2.0f; 
                                  break;
                              }
                          }
                     }
-                    
                     // 【修正 2】：精准提取左右两个主载波的真实距离
                     // 抛弃包含侧带的 span，只找左半区最强峰和右半区最强峰
                     float max_amp_L = 0; float f_carrier_L = 100000.0f;
