@@ -15,13 +15,18 @@ uint8_t OLED_Buffer[OLED_PAGES][OLED_WIDTH] = {0};
 #define OLED_SDA_Clr() HAL_GPIO_WritePin(OLED_SDA_PORT, OLED_SDA_PIN, GPIO_PIN_RESET)
 #define OLED_SDA_Set() HAL_GPIO_WritePin(OLED_SDA_PORT, OLED_SDA_PIN, GPIO_PIN_SET)
 
+//static void IIC_Delay(void)
+//{
+//    // H723 主频 420MHz，一个简单的 for 循环大约 3~4 个 CPU 周期
+//    // 设为 300 约等于 1000 周期 = ~2.5us 延时，折算 I2C 频率为 <200kHz，非常安全
+//    for(volatile uint32_t i=0; i<300; i++);
+//}
 static void IIC_Delay(void)
 {
-    // H723 主频 420MHz，一个简单的 for 循环大约 3~4 个 CPU 周期
-    // 设为 300 约等于 1000 周期 = ~2.5us 延时，折算 I2C 频率为 <200kHz，非常安全
-    for(volatile uint32_t i=0; i<300; i++);
+    // STM32F407 主频最高 168MHz，指令周期相比 420MHz 变长
+    // 设为 120 约等于 2.5us 延时，足以满足 I2C Fast Mode (<400kHz) 的时序要求
+    for(volatile uint32_t i=0; i<120; i++); 
 }
-
 void Soft_I2C_Init(void)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
